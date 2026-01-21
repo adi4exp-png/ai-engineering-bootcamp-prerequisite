@@ -1,7 +1,7 @@
 from fastapi import Request, APIRouter
 
 from api.api.models import RAGRequest, RAGResponse
-from api.agents.retrieval_genearation import rag_pipeline
+from api.agents.retrieval_generation import rag_pipeline
 from qdrant_client import QdrantClient
 
 import logging
