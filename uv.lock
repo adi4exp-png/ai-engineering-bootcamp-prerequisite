@@ -31,6 +31,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "cohere" },
     { name = "fastembed" },
     { name = "langsmith" },
     { name = "matplotlib" },
@@ -52,6 +53,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "cohere", specifier = ">=5.20.2" },
     { name = "fastembed", specifier = ">=0.7.4" },
     { name = "langsmith", specifier = ">=0.6.4" },
     { name = "matplotlib", specifier = ">=3.10.8" },
