@@ -2,6 +2,12 @@ import streamlit as st
 from chatbot_ui.core.config import config
 import requests
 
+st.set_page_config(
+    page_title="ECommerce Assistant",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 def api_call(method, url, **kwargs):
     
     def _show_error_popup(message):
@@ -38,6 +44,24 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
     st.session_state.messages.append({"role": "assistant", "content": "Hello! How can I assist today?."})
 
+if "used_context" not in st.session_state:
+    st.session_state.used_context = []
+
+with st.sidebar:
+    suggestions_tab, = st.tabs(["🔍 Suggestions"])
+
+    #Suggesstions Tab
+    with suggestions_tab:
+        if st.session_state.used_context:
+            for idx, item in enumerate(st.session_state.used_context):
+                st.caption(item.get('description','No description'))
+                if 'image_url' in item:
+                    st.image(item["image_url"],width=250)
+                st.caption(f"Price : {item['price']} USD")
+                st.divider()
+        else:
+            st.info("No suggestions yet")
+
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
@@ -48,9 +72,16 @@ if prompt := st.chat_input("Hello! How can I assist today?"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        output = api_call("post", f"{config.API_URL}/rag", json={"query": prompt})
-        response_data = output[1]
-        answer = response_data["answer"]
+        status,output = api_call("post", f"{config.API_URL}/rag", json={"query": prompt})
+        
+        used_context = output["used_context"]
+        answer = output["answer"]
+
+        # Save used_context to session_state.
+        st.session_state.used_context = used_context
+
         st.write(answer)
+        
     st.session_state.messages.append({"role": "assistant", "content": answer})
+    st.rerun()
     

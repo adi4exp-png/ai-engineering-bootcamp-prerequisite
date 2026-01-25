@@ -1,8 +1,7 @@
 from fastapi import Request, APIRouter
 
-from api.api.models import RAGRequest, RAGResponse
-from api.agents.retrieval_generation import rag_pipeline
-from qdrant_client import QdrantClient
+from api.api.models import RAGRequest, RAGResponse, RAGUsedContext
+from api.agents.retrieval_generation import rag_pipeline, rag_pipeline_wrapper
 
 import logging
 
@@ -12,20 +11,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-qdrant_client = QdrantClient(url="http://qdrant:6333")
-
 rag_router = APIRouter()
 
 @rag_router.post("/")
-def chat(
+def rag(
     request: Request,
     payload: RAGRequest
 ) -> RAGResponse:
-    answer = rag_pipeline(payload.query, qdrant_client)
+    answer = rag_pipeline_wrapper(payload.query)
     return RAGResponse(
         request_id=request.state.request_id,
-        answer=answer["answer"]
-        )
+        answer=answer["answer"],
+        used_context=[RAGUsedContext(**used_context) for used_context in answer["used_context"]]
+    )
 
 api_router = APIRouter()
 api_router.include_router(rag_router, prefix="/rag", tags=["rag"])
