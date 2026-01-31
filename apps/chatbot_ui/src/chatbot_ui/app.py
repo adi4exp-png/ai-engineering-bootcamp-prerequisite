@@ -8,6 +8,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+
 def api_call(method, url, **kwargs):
     
     def _show_error_popup(message):
@@ -29,6 +30,7 @@ def api_call(method, url, **kwargs):
             return True, response_data
 
         return False, response_data
+
     except requests.exceptions.ConnectionError:
         _show_error_popup("Connection error. Please check your network connection.")
         return False, {"message": "Connection error"}
@@ -41,11 +43,16 @@ def api_call(method, url, **kwargs):
 
 
 if "messages" not in st.session_state:
-    st.session_state.messages = []
-    st.session_state.messages.append({"role": "assistant", "content": "Hello! How can I assist today?."})
+    st.session_state.messages = [{"role": "assistant", "content": "Hello! How can I assist today?."}]
+
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
 
 if "used_context" not in st.session_state:
     st.session_state.used_context = []
+
 
 with st.sidebar:
     suggestions_tab, = st.tabs(["🔍 Suggestions"])
