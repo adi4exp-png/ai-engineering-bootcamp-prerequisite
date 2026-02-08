@@ -1,4 +1,4 @@
-from langsmith import traceable
+from langsmith import traceable, get_current_run_tree
 from langchain_core.messages import convert_to_openai_messages
 from openai import OpenAI
 import instructor
@@ -38,6 +38,7 @@ class AgentResponse(BaseModel):
 class IntentRouterResponse(BaseModel):
     question_relevant: bool
     answer: str
+    trace_id: str
 
 
 ### QnA Agent Node
@@ -49,38 +50,47 @@ class IntentRouterResponse(BaseModel):
 )
 def agent_node(state) -> dict:
 
-   template = prompt_template_config("api/agents/prompts/qa_agent.yaml", "qa_agent")
+    template = prompt_template_config("api/agents/prompts/qa_agent.yaml", "qa_agent")
    
-   prompt = template.render(
-      available_tools=state.available_tools
-   )
+    prompt = template.render(
+        available_tools=state.available_tools
+    )
 
-   messages = state.messages
+    messages = state.messages
 
-   conversation = []
+    conversation = []
 
-   for message in messages:
+    for message in messages:
         conversation.append(convert_to_openai_messages(message))
 
-   client = instructor.from_openai(OpenAI())
+    client = instructor.from_openai(OpenAI())
 
-   response, raw_response = client.chat.completions.create_with_completion(
-        model="gpt-4.1-mini",
-        response_model=AgentResponse,
-        messages=[{"role": "system", "content": prompt}, *conversation],
-        temperature=0.5,
-   )
+    response, raw_response = client.chat.completions.create_with_completion(
+            model="gpt-4.1-mini",
+            response_model=AgentResponse,
+            messages=[{"role": "system", "content": prompt}, *conversation],
+            temperature=0.5,
+    )
 
-   ai_message = format_ai_message(response)
+    current_run = get_current_run_tree()
 
-   return {
-      "messages": [ai_message],
-      "tool_calls": response.tool_calls,
-      "iteration": state.iteration + 1,
-      "answer": response.answer,
-      "final_answer": response.final_answer,
-      "references": response.references
-   }
+    if current_run:
+        current_run.metadata["usage_metadata"] = {
+            "input_tokens": raw_response.usage.prompt_tokens,
+            "output_tokens": raw_response.usage.completion_tokens,
+            "total_tokens": raw_response.usage.total_tokens
+        }
+
+    ai_message = format_ai_message(response)
+
+    return {
+        "messages": [ai_message],
+        "tool_calls": response.tool_calls,
+        "iteration": state.iteration + 1,
+        "answer": response.answer,
+        "final_answer": response.final_answer,
+        "references": response.references
+    }
 
 ### Intent Router Agent Node
 
@@ -109,13 +119,35 @@ def intent_router_node(state) :
             temperature=0.5,
             max_retries=3
         )
+
+        current_run = get_current_run_tree()
+
+        if current_run:
+            current_run.metadata["usage_metadata"] = {
+                "input_tokens": raw_response.usage.prompt_tokens,
+                "output_tokens": raw_response.usage.completion_tokens,
+                "total_tokens": raw_response.usage.total_tokens
+            }
+            trace_id = str(getattr(current_run, "trace_id", current_run.id))
+        else:
+            trace_id = None
+
         return {
             "question_relevant": response.question_relevant,
-            "answer": response.answer
+            "answer": response.answer,
+            "trace_id": trace_id
             }
     except Exception as e:
         logger.error(f"Error: {e}")
+        current_run = get_current_run_tree()
+
+        if current_run:
+            trace_id = str(getattr(current_run, "trace_id", current_run.id))
+        else:
+            trace_id = None
+
         return {
             "question_relevant": False,
-            "answer": "I'm sorry, I'm not sure how to answer that question."
+            "answer": "I'm sorry, I'm not sure how to answer that question.",
+            "trace_id": trace_id
         }
