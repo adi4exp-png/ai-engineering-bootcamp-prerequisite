@@ -8,6 +8,14 @@ from api.agents.utils.utils import format_ai_message
 from pydantic import BaseModel, Field
 from typing import List
 
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format=f"%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
 ### QnA Agent Response Model
 
 class ToolCall(BaseModel):
@@ -82,28 +90,32 @@ def agent_node(state) -> dict:
     metadata={"ls_provider": "openai", "ls_model_name": "gpt-4.1-mini"}
 )
 def intent_router_node(state) :
+    template = prompt_template_config("api/agents/prompts/intent_router_agent.yaml", "intent_router_agent")
+    prompt = template.render()
+    messages = state.messages
 
-   template = prompt_template_config("api/agents/prompts/intent_router_agent.yaml", "intent_router_agent")
-   
-   prompt = template.render()
+    conversation = []
 
-   messages = state.messages
-
-   conversation = []
-
-   for message in messages:
+    for message in messages:
         conversation.append(convert_to_openai_messages(message))
 
-   client = instructor.from_openai(OpenAI())
+    client = instructor.from_openai(OpenAI())
 
-   response, raw_response = client.chat.completions.create_with_completion(
-        model="gpt-4.1-mini",
-        response_model=IntentRouterResponse,
-        messages=[{"role": "system", "content": prompt}, *conversation],
-        temperature=0.5,
-   )
-
-   return {
-      "question_relevant": response.question_relevant,
-      "answer": response.answer
-      }
+    try:
+        response, raw_response = client.chat.completions.create_with_completion(
+            model="gpt-4.1-mini",
+            response_model=IntentRouterResponse,
+            messages=[{"role": "system", "content": prompt}, *conversation],
+            temperature=0.5,
+            max_retries=3
+        )
+        return {
+            "question_relevant": response.question_relevant,
+            "answer": response.answer
+            }
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        return {
+            "question_relevant": False,
+            "answer": "I'm sorry, I'm not sure how to answer that question."
+        }

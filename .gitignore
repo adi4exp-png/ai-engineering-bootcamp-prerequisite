@@ -211,3 +211,4 @@ data/
 qdrant_storage/
 
 .DS_Store
+postgres_data/
