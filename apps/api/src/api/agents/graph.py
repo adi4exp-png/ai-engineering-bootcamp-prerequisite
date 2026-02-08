@@ -9,6 +9,8 @@ from api.agents.tools import get_formatted_context
 from api.agents.utils.utils import get_tool_descriptions
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
+from langgraph.checkpoint.postgres import PostgresSaver
+import os
 
 
 
@@ -78,25 +80,31 @@ workflow.add_conditional_edges(
 
 workflow.add_edge("tool_node", "agent_node")
 
-graph = workflow.compile()
-
 
 ### Agent Execution Function
-def run_agent(question: str) -> dict:
+def run_agent(question: str, thread_id: str) -> dict:
     initial_state = {
         "messages": [{"role": "user", "content": question}],
         "iteration": 0,
         "available_tools": tool_descriptions
     }
-    result = graph.invoke(initial_state)
+
+    config = {
+        "configurable": {
+            "thread_id": thread_id
+        }
+    }
+    with PostgresSaver.from_conn_string(f"""postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}""") as checkpointer:
+        graph = workflow.compile(checkpointer=checkpointer)
+        result = graph.invoke(initial_state,config)
     return result
 
 
-
-def rag_agent_wrapper(question):
+# Wrapper for Hybrid Search. DOes both Semetic and dense vector search
+def rag_agent_wrapper(question, thread_id: str):
     qdrant_client = QdrantClient(url="http://qdrant:6333")
 
-    result = run_agent(question)
+    result = run_agent(question, thread_id)
 
     used_context = []
     dummy_vector = np.zeros(1536).tolist()

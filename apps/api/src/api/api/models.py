@@ -6,6 +6,7 @@ from typing import Optional
 
 class RAGRequest(BaseModel):
     query: str = Field (..., description="The query is used in the RAG pipeline")
+    thread_id: str = Field (..., description="The Thread ID")
 
 class RAGUsedContext(BaseModel):
     image_url: str = Field(..., description="The Url of the image of the item")
