@@ -8,6 +8,7 @@ dependencies = [
     "google-genai>=1.57.0",
     "groq>=1.0.0",
     "ipykernel>=7.1.0",
+    "ipywidgets>=8.1.8",
     "openai>=2.15.0",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.12.0",
@@ -19,12 +20,15 @@ dependencies = [
 members = [
     "apps/api",
     "apps/chatbot_ui",
+    "apps/items_mcp_server",
+    "apps/reviews_mcp_server",
 ]
 
 [dependency-groups]
 dev = [
     "cohere>=5.20.2",
     "fastembed>=0.7.4",
+    "fastmcp>=2.14.5",
     "langgraph-checkpoint-postgres>=3.0.4",
     "langsmith>=0.6.4",
     "matplotlib>=3.10.8",
