@@ -5,12 +5,13 @@ import numpy as np
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 from typing import Annotated, List, Any, Dict
 from api.agents.agents import ToolCall, RAGUsedContext, agent_node, intent_router_node
-from api.agents.tools import get_formatted_context, get_formatted_reviews_context
+from api.agents.tools import get_formatted_items_context, get_formatted_reviews_context
 from api.agents.utils.utils import get_tool_descriptions
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.postgres import PostgresSaver
 import os
+import json
 
 
 
@@ -51,7 +52,7 @@ def intent_router_conditional_edges(state: State):
 
 workflow = StateGraph(State)
 
-tools = [get_formatted_context, get_formatted_reviews_context]
+tools = [get_formatted_items_context, get_formatted_reviews_context]
 tool_node = ToolNode(tools)
 tool_descriptions = get_tool_descriptions(tools)
 
@@ -141,4 +142,109 @@ def rag_agent_wrapper(question, thread_id: str):
         "trace_id": result.get("trace_id","")
     }
 
+
+#### Agent Execution Function
+
+def rag_agent_stream_wrapper(question: str, thread_id: str):
+
+    def _string_for_sse(message: str):
+        return f"data: {message}\n\n"
+
+    def _process_graph_event(chunk):
+
+        def _is_node_start(chunk):
+            return chunk[1].get("type") == "task"
+
+        def _is_node_end(chunk):
+            return chunk[0] == "updates"
+
+        def _tool_to_text(tool_call):
+            if tool_call.name == "get_formatted_items_context":
+                return f"Looking for items: {tool_call.arguments.get('query', '')}."
+            elif tool_call.name == "get_formatted_reviews_context":
+                return f"Fetching user reviews..."
+            else:
+                return f"Unknown tool: {tool_call.name}."
+
+        if _is_node_start(chunk):
+            if chunk[1].get("payload", {}).get("name") == "intent_router_node":
+                return "Analysing the question..."
+            if chunk[1].get("payload", {}).get("name") == "agent_node":
+                return "Planning..."
+            if chunk[1].get("payload", {}).get("name") == "tool_node":
+                message = " ".join([_tool_to_text(tool_call) for tool_call in chunk[1].get('payload', {}).get('input', {}).tool_calls])
+                return message
+        else:
+            return False
+
+    qdrant_client = QdrantClient(url="http://qdrant:6333")
+
+    initial_state = {
+        "messages": [{"role": "user", "content": question}],
+        "iteration": 0,
+        "available_tools": tool_descriptions
+    }
+    config = {
+        "configurable": {
+            "thread_id": thread_id
+        }
+    }
+
+    with PostgresSaver.from_conn_string(f"""postgresql://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}""") as checkpointer:
+
+        graph = workflow.compile(checkpointer=checkpointer)
+
+        for chunk in graph.stream(
+            initial_state, 
+            config=config,
+            stream_mode=["debug", "values"]
+        ):
+            processed_chunk = _process_graph_event(chunk)
+
+            if processed_chunk:
+                yield _string_for_sse(processed_chunk)
+            
+            if chunk[0] == "values":
+                result = chunk[1]
+
+    used_context = []
+    dummy_vector = np.zeros(1536).tolist()
+
+    for item in result.get("references", []):
+        payload = qdrant_client.query_points(
+            collection_name="Amazon-items-collection-01-hybrid-search",
+            query=dummy_vector,
+            limit=1,
+            using="text-embedding-3-small",
+            with_payload=True,
+            query_filter=Filter(
+                must=[
+                    FieldCondition(
+                        key="parent_asin",
+                        match=MatchValue(value=item.id)
+                    )
+                ]
+            )
+        ).points[0].payload
+        image_url = payload.get("image")
+        price = payload.get("price")
+        if image_url:
+            used_context.append({
+                "image_url": image_url,
+                "price": price,
+                "description": item.description
+            })
+
+    yield _string_for_sse(json.dumps(
+        {
+            "type": "final_result",
+            "data": {
+                "answer": result.get("answer", ""),
+                "used_context": used_context,
+                "trace_id": result.get("trace_id", "")
+            }
+        }
+    ))
+
+               
 

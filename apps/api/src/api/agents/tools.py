@@ -23,10 +23,10 @@ def get_embedding(text, model="text-embedding-3-small"):
     return response.data[0].embedding
 
 @traceable(
-    name="retrieve_data",
+    name="retrieve_items_data",
     run_type="retriever"
 )
-def retrieve_data(query, k=5):
+def retrieve_items_data(query, k=5):
 
     query_embedding = get_embedding(query)
 
@@ -73,10 +73,10 @@ def retrieve_data(query, k=5):
 
 
 @traceable(
-    name="format_retrieve_context",
+    name="format_retrieve_items_context",
     run_type="prompt"
 )
-def process_context(context):
+def process_items_context(context):
 
     formatted_context = ""
 
@@ -86,7 +86,7 @@ def process_context(context):
     return formatted_context
 
 
-def get_formatted_context(query: str, top_k: int = 5) -> str:
+def get_formatted_items_context(query: str, top_k: int = 5) -> str:
 
     """Get the top k context, each representing an inventory item for a given query.
     
@@ -98,8 +98,8 @@ def get_formatted_context(query: str, top_k: int = 5) -> str:
         A string of the top k context chunks with IDs and average ratings prepending each chunk, each representing an inventory item for a given query.
     """
 
-    context = retrieve_data(query, top_k)
-    formatted_context = process_context(context)
+    context = retrieve_items_data(query, top_k)
+    formatted_context = process_items_context(context)
 
     return formatted_context
 
