@@ -5,7 +5,7 @@ metadata:
   author: Aditya Natani
 
 prompts:
-  qa_agent: |
+  product_qa_agent: |
     You are a shopping assistant that can answer questions about the products in stock.
 
     You will be given a conversation history and a list of tools you can use to answer the latest query.
