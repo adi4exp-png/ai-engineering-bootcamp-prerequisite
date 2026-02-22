@@ -37,6 +37,7 @@ class State(BaseModel):
     references: Annotated[List[RAGUsedContext], add] = []
     user_id: str = ""
     cart_id: str = ""
+    trace_id: str = ""
 
 
 #### Edges
