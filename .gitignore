@@ -212,3 +212,6 @@ qdrant_storage/
 
 .DS_Store
 postgres_data/
+
+#Agent Development Kit
+.adk
